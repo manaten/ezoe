@@ -3,8 +3,9 @@
 'use strict';
 
 var read = require('read');
-var cheerio = require('cheerio');
 var program = require('commander');
+var Promise = require('bluebird');
+
 var Askfm = require('../lib/askfm');
 
 var colors = {
@@ -17,35 +18,54 @@ var colors = {
 var keywords = /質問ではない。?|不?自由/g;
 
 program
-.version('0.1.3')
+.version('0.0.1')
 .option('-u, --user [username]', 'Specify who to ask. default: EzoeRyou', 'EzoeRyou')
 .usage('[options] [question]')
 .parse(process.argv);
 
 var ask = new Askfm(program.user);
-if (program.args.length === 0) {
-  ask.getRss(function(rss) {
-    showLog(rss);
-  });
-} else {
-  var q = extractArgs(program.args);
-  ask.checkLogin(function(token) {
-    if (token) {
-      getUserInfo(function(user) {
-        ask.doLogin(token, user, function() {
-          ask.postQuestion(q);
+Promise.resolve()
+.then(function() {
+  if (program.args.length === 0) {
+    return ask.getLog()
+      .then(function(logs) {
+        logs.forEach(function(log) {
+          console.log(log.link);
+          console.log(colors.red + log.title + colors.end);
+          console.log(log.desc.replace(keywords, colors.green + '$&' + colors.end));
+          console.log();
         });
       });
-    } else {
-      ask.postQuestion(q);
-    }
-  });
-}
+  } else {
+    return getUserInfo()
+    .then(function(user) {
+      var question = extractArgs(program.args);
+      return ask.postQuestion(user, question)
+      .then(function() {
+        console.log(program.user + ' に ' + question + 'と質問しました');
+      });
+    })
+  }
+})
+.catch(function(err) {
+  console.error(err.message);
+});
 
-function getUserInfo(callback) {
-  read({prompt: 'User: '}, function(err, user) {
-    read({prompt: 'Password: ', silent: true}, function(err, password) {
-      callback({login: user, password: password});
+function getUserInfo() {
+  if (process.env.ASKFM_USER && process.env.ASKFM_PASSWORD) {
+    return Promise.resolve({login: process.env.ASKFM_USER, password: process.env.ASKFM_PASSWORD});
+  }
+  return new Promise(function(resolve, reject) {
+    read({prompt: 'User: '}, function(err, user) {
+      if (err || !user) {
+        return reject(new Error('ユーザー名を入力してください'));
+      }
+      read({prompt: 'Password: ', silent: true}, function(err, password) {
+        if (err || !password) {
+          return reject(new Error('パスワードを入力してください'));
+        }
+        resolve({login: user, password: password});
+      });
     });
   });
 }
@@ -53,27 +73,5 @@ function getUserInfo(callback) {
 function extractArgs(args) {
   return args.reduce(function(previous, current) {
     return previous + ' ' + current;
-  });
-}
-
-function showLog(rss) {
-  var logs = [];
-  var $ = cheerio.load(rss, {ignoreWhitespace: true, xmlMode: true});
-  $('item').each(function(i, elem) {
-    var link = $(this).children('link').text()
-    var title = colors.red + $(this).children('title').text() + colors.end;
-    var desc = $(this).children('description').text();
-    desc = desc.replace(keywords, colors.green + '$&' + colors.end);
-    logs.push({
-      link: link,
-      title: title,
-      desc: desc
-    });
-  });
-  logs.reverse().forEach(function(log) {
-    console.log(log.link);
-    console.log(log.title);
-    console.log(log.desc);
-    console.log();
   });
 }
