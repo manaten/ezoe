@@ -1,5 +1,5 @@
 # ezoe
-The ezoe command implementation written in Node.js.
+The ezoe command implementation written in Node.js with Phantom.js.
 
 ## 質問ではない
 
@@ -43,4 +43,4 @@ MIT
 
 ## Author
 
-Toshihiro Shimizu (@meso)
+Originally developed by Toshihiro Shimizu (@meso)
